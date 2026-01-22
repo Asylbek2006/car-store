@@ -28,6 +28,29 @@ The following features are planned for the system:
 - Order management (request car purchases)
 - Admin management (manage users and content)
 
+## Use Case Diagram
+The Use Case Diagram illustrates the interaction between different user roles and the system. It helps to understand the main use cases in the application and how each user type interacts with the system.
+
+You can view the Use Case Diagram by following this link:  
+[Use Case Diagram](https://drive.google.com/file/d/1Pa01c8rGoWM3t-Ce1pMcrwujTuMqH__O/view?usp=drive_link)
+
+## UML Diagram
+The UML Class Diagram shows the structure of the system's classes and their relationships. This diagram plays an essential role in understanding the system architecture and its design.
+
+You can view the UML Diagram by following this link:  
+[UML Class Diagram](https://drive.google.com/file/d/1tu3kjKnhNpLt2u5pMbTCAQq4P_s2m8db/view?usp=drive_link)
+
+We have prepared a comprehensive Gantt chart to map out the project timeline, task allocation, and team responsibilities from Week 7 to Week 10.
+
+You can access the chart here:  
+📊 Gantt Chart – Project Plan: https://docs.google.com/spreadsheets/d/1dXg1ZdvqJ3SxDAuWLZtYznT7G4XbgnJk/edit?usp=sharing&ouid=100654955127487833290&rtpof=true&sd=true
+
+This chart includes:
+- All planned tasks
+- Phases of development
+- Associated team members
+- Weekly time allocation
+
 ## Installation
 To run the project, clone the repository and install the dependencies.
 
