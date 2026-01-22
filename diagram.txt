@@ -1,0 +1,45 @@
+1. System Architecture:
+   - The system follows a monolithic architecture, where all modules (authentication, car management, user management, order management, etc.) are integrated into one codebase.
+   - Users → HTTP API → Service Layer → Repository → Database. 
+   - Modules:
+     - Auth: Handles user authentication (login, registration).
+     - Users: Manages user data, roles, and access control.
+     - Cars: Manages car listings, including add, edit, and delete functions.
+     - Orders: Handles customer car purchase requests and order status.
+     - Database: Stores all data (users, cars, orders).
+
+2. Use-Case Diagram:
+   - Actors:
+     - Admin: Manages the system, oversees all users, and approves cars.
+     - Seller: Adds, updates, and deletes car listings.
+     - Customer: Browses and searches for cars, places orders.
+   - Use Cases:
+     - Register / Login: For Admin, Seller, and Customer to authenticate.
+     - View Cars: Customers and Admin can view car listings.
+     - Add / Update / Delete Car: Sellers add, update, and delete car listings.
+     - Place Order: Customers can place orders for cars they want to purchase.
+     - Manage Users: Admin can manage all users, including Sellers and Customers.
+
+3. ERD (Entity Relationship Diagram):
+   - Entities:
+     - User: id (PK), name, email, password, role (admin, seller, customer).
+     - Car: id (PK), make, model, year, price, seller_id (FK from User).
+     - Order: id (PK), user_id (FK from User), car_id (FK from Car), status.
+   - Relationships:
+     - User 1→* Car: A user (Seller) can have many cars.
+     - User 1→* Order: A user (Customer) can place many orders.
+     - Car 1→1 Order: Each car can have only one order at a time (each purchase request corresponds to one car).
+
+4. UML Class Diagram:
+   - Classes:
+     - UserService: Manages user operations like registration, login, and role management.
+     - CarService: Manages car-related operations, including adding, updating, and deleting cars.
+     - OrderService: Handles order processing, including order creation and status updates.
+     - Repository: Interfaces with the database to handle CRUD operations for cars, users, and orders.
+
+5. Data Flow:
+   - User sends an HTTP request (GET, POST, PUT, DELETE) to the API.
+   - Router directs the request to the appropriate handler (e.g., for authentication or car management).
+   - Handler calls the service layer, where the business logic is applied (e.g., validating user input, checking car availability).
+   - The service interacts with the repository, which queries the database.
+   - The database returns the data or acknowledgment of the changes, and the response is sent back to the user.
