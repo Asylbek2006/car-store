@@ -58,35 +58,46 @@ func (handler *AuthHandler) GetAll(c *gin.Context) {
 
 func (handler *AuthHandler) SignIn(c *gin.Context) {
 	var request models.SignInRequest
-	err := c.BindJSON(&request)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, models.NewApiError("could bind json body"))
+	if err := c.BindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, models.NewApiError("could not bind json body"))
 		return
 	}
 
 	user, err := handler.authRepo.FindEmail(c, request.Email)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.NewApiError("could not find the email"))
+		c.JSON(http.StatusUnauthorized, models.NewApiError("invalid email or password"))
 		return
 	}
 
-	err = bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(request.Password))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, models.NewApiError("could not sign in"))
+	if err := bcrypt.CompareHashAndPassword(
+		[]byte(user.PasswordHash),
+		[]byte(request.Password),
+	); err != nil {
+		c.JSON(http.StatusUnauthorized, models.NewApiError("invalid email or password"))
 		return
 	}
-	claims := jwt.RegisteredClaims{
-		Subject:   strconv.Itoa(user.User_id),
-		ExpiresAt: jwt.NewNumericDate(time.Now().Add(config.Config.JwtExpiresIn)),
+
+	claims := models.JwtClaims{
+		UserID: user.User_id,
+		Role:   user.Role,
+		RegisteredClaims: jwt.RegisteredClaims{
+			Subject:   strconv.Itoa(user.User_id),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(config.Config.JwtExpiresIn)),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+		},
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+
 	tokenString, err := token.SignedString([]byte(config.Config.JwtSecretKey))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, models.NewApiError("could not sign JWT"))
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"token": tokenString})
+
+	c.JSON(http.StatusOK, gin.H{
+		"token": tokenString,
+	})
 }
 
 func (handler *AuthHandler) SignOut(c *gin.Context) {
