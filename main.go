@@ -21,6 +21,7 @@ func main() {
 		AllowMethods:    []string{"*"},
 	}
 	r.Use(cors.New(corsConfig))
+
 	err := loadConfig()
 	if err != nil {
 		panic(err)
@@ -29,7 +30,15 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+
+	// --- REPOSITORIES & HANDLERS ---
 	authRepository := repositories.NewAuthRepository(connection)
+	// You need to pass BOTH repos to NewPasswordResetHandler if you updated it as discussed before
+	// If your NewPasswordResetHandler only takes one, adjust this line accordingly.
+	// Based on previous context, it likely needs authRepo and passwordResetRepo.
+	passwordResetRepository := repositories.NewPasswordResetRepository(connection)
+	passwordResetHandler := handlers.NewPasswordResetHandler(authRepository, passwordResetRepository)
+
 	authHandler := handlers.NewAuthHandler(authRepository)
 	carRepository := repositories.NewCarRepository(connection)
 	carHandler := handlers.NewCarHandlers(carRepository)
@@ -49,25 +58,35 @@ func main() {
 	documentHandler := handlers.NewDocumentHandler(carRepository, documentRepository)
 	reviewRepository := repositories.NewReviewRepository(connection)
 	reviewHandler := handlers.NewReviewHandler(carRepository, reviewRepository)
-	passwordResetRepository := repositories.NewPasswordResetRepository(connection)
-	passwordResetHandler := handlers.NewPasswordResetHandler(authRepository, passwordResetRepository)
 	recommendationHandler := handlers.NewRecommendationHandler(carRepository)
 	adminRepository := repositories.NewAdminRepository(connection)
 	adminHandler := handlers.NewAdminHandler(adminRepository)
 
-	//User handlers
+	// Serve static files
+	r.Static("/static", "./frontend")
+	r.StaticFile("/", "./frontend/index.html")
+
+	// ==========================================
+	// 1. PUBLIC ROUTES (No Token Needed)
+	// ==========================================
 	r.POST("/api/user/signUp", authHandler.SignUp)
 	r.POST("/api/user/signIn", authHandler.SignIn)
 	r.POST("/api/user/signOut", authHandler.SignOut)
-	r.POST("/api/user/forgotPassword", passwordResetHandler.ForgotPassword)
-	r.POST("/api/user/resetPassword", passwordResetHandler.ResetPassword)
 
-	//Car handlers
+	// *** MOVED HERE (Fix) ***
+	// Password reset must be public because the user is logged out!
+	r.POST("/api/user/forgot-password", passwordResetHandler.ForgotPassword)
+	r.POST("/api/user/reset-password", passwordResetHandler.ResetPassword)
+
+	// ==========================================
+	// 2. AUTHORIZED ROUTES (Token Required)
+	// ==========================================
 	authorized := r.Group("/")
 	authorized.Use(middleware.AuthMiddleware())
 
+	// Admin Routes
 	admin := authorized.Group("/api/admin")
-	admin.Use(middleware.AuthMiddleware(), middleware.AdminOnly())
+	admin.Use(middleware.AdminOnly())
 	{
 		admin.GET("/users", authHandler.GetAll)
 		admin.GET("/payments", paymentHandler.GetAllPayments)
@@ -77,32 +96,47 @@ func main() {
 		admin.GET("/stats", adminHandler.GetStats)
 	}
 
+	// User Routes
 	{
+		authorized.GET("/api/user/balance", authHandler.GetUserBalance)
+
 		authorized.POST("/api/cars", carHandler.CreateCar)
+		authorized.POST("/api/car/buy", carHandler.BuyCar)
+		authorized.GET("/api/cars", carHandler.GetAllCars)
 		authorized.PUT("/api/cars/:id", carHandler.UpdateCar)
 		authorized.PATCH("/api/cars/:id", carHandler.PatchCar)
 		authorized.DELETE("/api/cars/:id", carHandler.DeleteCar)
+
 		authorized.POST("/api/sales", saleHandler.CreateSale)
-		authorized.POST("/api/rentals", rentalHandler.CreateRental)
-		authorized.POST("/api/payments", paymentHandler.CreatePayment)
-		authorized.GET("/api/payments", paymentHandler.GetMyPayments)
+
+		authorized.POST("/api/user/rentals", rentalHandler.CreateRental)
+		authorized.GET("/api/user/rentals", rentalHandler.GetAllRentals)
 		authorized.PUT("/api/rentals/:id/complete", rentalHandler.CompleteRental)
 		authorized.PUT("/api/rentals/:id/cancel", rentalHandler.CancelRental)
+
+		authorized.POST("/api/payments", paymentHandler.CreatePayment)
+		authorized.GET("/api/payments", paymentHandler.GetMyPayments)
+
 		authorized.POST("/api/cars/:id/maintenance", maintenanceHandler.CreateMaintenance)
 		authorized.PATCH("api/maintenance/:id", maintenanceHandler.PatchMaintenance)
 		authorized.GET("/api/cars/:id/maintenance", maintenanceHandler.GetMaintenance)
+
 		authorized.POST("/api/cars/:id/fuel", fuelHandler.CreateFuel)
 		authorized.PATCH("api/fuel/:id", fuelHandler.PatchFuel)
 		authorized.GET("/api/cars/:id/fuel", fuelHandler.GetFuel)
+
 		authorized.POST("/api/cars/:id/expenses", expenseHandler.CreateExpense)
 		authorized.PATCH("/api/expenses/:id", expenseHandler.PatchExpense)
 		authorized.GET("/api/cars/:id/expenses", expenseHandler.GetExpense)
+
 		authorized.POST("/api/cars/:id/documents", documentHandler.CreateDocument)
 		authorized.PATCH("/api/documents/:id", documentHandler.PatchDocument)
 		authorized.GET("/api/cars/:id/documents", documentHandler.GetByCar)
 		authorized.DELETE("/api/documents/:id", documentHandler.DeleteDocument)
+
 		authorized.POST("/api/cars/:id/reviews", reviewHandler.CreateReview)
 		authorized.GET("/api/cars/:id/reviews", reviewHandler.GetByCar)
+
 		authorized.GET("/api/recommendation/questions", recommendationHandler.GetQuestions)
 		authorized.POST("/api/recommendation/result", recommendationHandler.GetRecommendation)
 	}
@@ -112,11 +146,9 @@ func main() {
 
 func connectToDb() (*pgxpool.Pool, error) {
 	conn, err := pgxpool.New(context.Background(), config.Config.DbConnectionString)
-
 	if err != nil {
 		return nil, err
 	}
-
 	err = conn.Ping(context.Background())
 	if err != nil {
 		return nil, err
@@ -143,14 +175,11 @@ func loadConfig() error {
 	if err != nil {
 		return err
 	}
-
 	var mapConfig config.MapConfig
 	err = viper.Unmarshal(&mapConfig)
 	if err != nil {
 		return err
 	}
-
 	config.Config = &mapConfig
-
 	return nil
 }
