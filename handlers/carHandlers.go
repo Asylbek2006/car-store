@@ -156,3 +156,32 @@ func (handler *CarHandler) PatchCar(c *gin.Context) {
 	handler.carRepo.UpdateFields(c.Request.Context(), car)
 	c.JSON(200, car)
 }
+
+func (handler *CarHandler) BuyCar(c *gin.Context) {
+	// 1. Читаем JSON из тела запроса
+	var req models.BuyCarRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Неверный формат JSON или отсутствует car_id"})
+		return
+	}
+
+	// Проверяем, что ID пришел
+	if req.CarID == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "car_id обязателен"})
+		return
+	}
+
+	userID := c.GetInt("user_id")
+
+	// 2. Вызываем репозиторий (передаем ID из JSON)
+	err := handler.carRepo.BuyCarTransaction(c.Request.Context(), userID, req.CarID)
+
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Покупка успешно завершена!",
+	})
+}

@@ -40,7 +40,7 @@ func (handler *AuthHandler) SignUp(c *gin.Context) {
 		PasswordHash: string(passwordHash),
 	}
 
-	id, err := handler.authRepo.Create(c, user)
+	id, err := handler.authRepo.Create(c.Request.Context(), user)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, models.NewApiError("could not create an user"))
 		return
@@ -49,9 +49,10 @@ func (handler *AuthHandler) SignUp(c *gin.Context) {
 }
 
 func (handler *AuthHandler) GetAll(c *gin.Context) {
-	users, err := handler.authRepo.FindAll(c)
+	users, err := handler.authRepo.FindAll(c.Request.Context())
 	if err != nil {
 		c.Status(http.StatusInternalServerError)
+		return
 	}
 	c.JSON(http.StatusOK, users)
 }
@@ -63,12 +64,14 @@ func (handler *AuthHandler) SignIn(c *gin.Context) {
 		return
 	}
 
-	user, err := handler.authRepo.FindEmail(c, request.Email)
+	// This now expects a *models.User, not an int
+	user, err := handler.authRepo.FindByEmailHash(c.Request.Context(), request.Email)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, models.NewApiError("invalid email or password"))
 		return
 	}
 
+	// Now we can access user.PasswordHash because user is a struct
 	if err := bcrypt.CompareHashAndPassword(
 		[]byte(user.PasswordHash),
 		[]byte(request.Password),
@@ -104,4 +107,16 @@ func (handler *AuthHandler) SignOut(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"message": "successfully exited",
 	})
+}
+
+func (handler *AuthHandler) GetUserBalance(c *gin.Context) {
+	userID := c.GetInt("user_id")
+
+	balance, err := handler.authRepo.GetBalance(c.Request.Context(), userID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, models.NewApiError("could not get user balance"))
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"balance": balance})
 }
