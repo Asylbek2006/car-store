@@ -3,6 +3,7 @@ package repositories
 import (
 	"car-management-system/models"
 	"context"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -15,10 +16,13 @@ func NewAuthRepository(conn *pgxpool.Pool) *AuthRepository {
 	return &AuthRepository{db: conn}
 }
 
+// Create a new user
 func (repository *AuthRepository) Create(ctx context.Context, user models.User) (int, error) {
 	var id int
-
-	err := repository.db.QueryRow(ctx, "insert into users(full_name, email, password_hash) values($1, $2, $3) returning user_id", user.Full_name, user.Email, user.PasswordHash).Scan(&id)
+	// Added 'role' to insert, assuming default is 'user' or handled by DB default
+	err := repository.db.QueryRow(ctx,
+		"INSERT INTO users(full_name, email, password_hash) VALUES($1, $2, $3) RETURNING user_id",
+		user.Full_name, user.Email, user.PasswordHash).Scan(&id)
 
 	if err != nil {
 		return 0, err
@@ -27,7 +31,7 @@ func (repository *AuthRepository) Create(ctx context.Context, user models.User) 
 }
 
 func (repository *AuthRepository) FindAll(ctx context.Context) ([]models.User, error) {
-	sql := "select user_id, full_name, email, password_hash, role from users order by user_id"
+	sql := "SELECT user_id, full_name, email, password_hash, role FROM users ORDER BY user_id"
 
 	rows, err := repository.db.Query(ctx, sql)
 	if err != nil {
@@ -54,21 +58,59 @@ func (repository *AuthRepository) FindAll(ctx context.Context) ([]models.User, e
 	return users, nil
 }
 
-func (repository *AuthRepository) FindEmail(ctx context.Context, email string) (models.User, error) {
-	row := repository.db.QueryRow(ctx, "select user_id, full_name, email, password_hash, role from users where email = $1", email)
-
-	var user models.User
-	err := row.Scan(&user.User_id, &user.Full_name, &user.Email, &user.PasswordHash, &user.Role)
-	if err != nil {
-		return models.User{}, err
-	}
-	return user, err
+// Update Password (used for Reset Password flow)
+func (r *AuthRepository) UpdatePassword(ctx context.Context, userID int, newPasswordHash string) error {
+	_, err := r.db.Exec(ctx,
+		`UPDATE users SET password_hash = $1 WHERE user_id = $2`,
+		newPasswordHash, userID,
+	)
+	return err
 }
 
-func (repository *AuthRepository) UpdatePassword(ctx context.Context, userID int, passwordHash string) error {
-	_, err := repository.db.Exec(ctx,
-		`UPDATE users SET password_hash=$1 WHERE user_id=$2`,
-		passwordHash, userID,
+// FindByEmail - Returns ONLY ID (Used for Forgot Password check)
+func (r *AuthRepository) FindByEmail(ctx context.Context, email string) (int, error) {
+	var userID int
+	err := r.db.QueryRow(ctx, "SELECT user_id FROM users WHERE email = $1", email).Scan(&userID)
+	return userID, err
+}
+
+// FindByEmailHash - Returns FULL USER (Used for Login/SignIn)
+// FIX: Now returns *models.User instead of int
+func (r *AuthRepository) FindByEmailHash(ctx context.Context, email string) (*models.User, error) {
+	var user models.User
+	// We need ID, Password (to compare), and Role (for JWT)
+	query := `SELECT user_id, full_name, email, password_hash, role FROM users WHERE email = $1`
+
+	err := r.db.QueryRow(ctx, query, email).Scan(
+		&user.User_id,
+		&user.Full_name,
+		&user.Email,
+		&user.PasswordHash,
+		&user.Role,
 	)
+
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
+// GetBalance - Added COALESCE to prevent errors if balance is NULL
+func (repository *AuthRepository) GetBalance(ctx context.Context, userID int) (float64, error) {
+	var balance float64
+	// COALESCE(balance, 0) ensures we get 0.0 instead of a Scan error if DB is NULL
+	err := repository.db.QueryRow(ctx, "SELECT COALESCE(balance, 0) FROM users WHERE user_id = $1", userID).Scan(&balance)
+
+	if err != nil {
+		return 0, err
+	}
+	return balance, nil
+}
+
+// SaveResetToken
+func (repository *AuthRepository) SaveResetToken(ctx context.Context, userID int, token string) error {
+	expiresAt := time.Now().Add(1 * time.Hour)
+	query := `INSERT INTO password_resets (user_id, token, expires_at) VALUES ($1, $2, $3)`
+	_, err := repository.db.Exec(ctx, query, userID, token, expiresAt)
 	return err
 }

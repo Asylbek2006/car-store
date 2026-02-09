@@ -3,7 +3,10 @@ package repositories
 import (
 	"car-management-system/models"
 	"context"
+	"errors"
+	"fmt"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -173,4 +176,73 @@ func (repository *CarRepository) GetRecommendedCars(ctx context.Context, carType
 	}
 
 	return cars, nil
+}
+
+func (r *CarRepository) BuyCarTransaction(ctx context.Context, buyerID int, carID int) error {
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	// --- ИСПРАВЛЕНИЕ 1: используем car_id вместо id ---
+	var carPrice float64
+	var ownerID int
+	var status string
+
+	// Было: WHERE id = $1
+	// Стало: WHERE car_id = $1
+	queryCar := `SELECT price, owner_id, status FROM cars WHERE car_id = $1 FOR UPDATE`
+
+	err = tx.QueryRow(ctx, queryCar, carID).Scan(&carPrice, &ownerID, &status)
+	if err == pgx.ErrNoRows {
+		return errors.New("машина не найдена")
+	} else if err != nil {
+		return err
+	}
+
+	if status != "for_sale" {
+		return errors.New("эта машина не продается")
+	}
+	if ownerID == buyerID {
+		return errors.New("нельзя купить свою машину")
+	}
+
+	// --- ИСПРАВЛЕНИЕ 2: используем user_id вместо id ---
+	var buyerBalance float64
+
+	// Было: WHERE id = $1
+	// Стало: WHERE user_id = $1
+	queryBuyer := `SELECT balance FROM users WHERE user_id = $1 FOR UPDATE`
+
+	err = tx.QueryRow(ctx, queryBuyer, buyerID).Scan(&buyerBalance)
+	if err != nil {
+		return fmt.Errorf("ошибка получения данных покупателя: %v", err)
+	}
+
+	if buyerBalance < carPrice {
+		return errors.New("недостаточно средств")
+	}
+
+	// --- ИСПРАВЛЕНИЕ 3: Обновление балансов (user_id) ---
+
+	// Списание у покупателя
+	_, err = tx.Exec(ctx, `UPDATE users SET balance = balance - $1 WHERE user_id = $2`, carPrice, buyerID)
+	if err != nil {
+		return fmt.Errorf("ошибка списания средств: %v", err)
+	}
+
+	// Начисление продавцу
+	_, err = tx.Exec(ctx, `UPDATE users SET balance = balance + $1 WHERE user_id = $2`, carPrice, ownerID)
+	if err != nil {
+		return fmt.Errorf("ошибка зачисления средств: %v", err)
+	}
+
+	// --- ИСПРАВЛЕНИЕ 4: Обновление машины (car_id) ---
+	_, err = tx.Exec(ctx, `UPDATE cars SET owner_id = $1, status = 'owned' WHERE car_id = $2`, buyerID, carID)
+	if err != nil {
+		return fmt.Errorf("ошибка обновления владельца: %v", err)
+	}
+
+	return tx.Commit(ctx)
 }
