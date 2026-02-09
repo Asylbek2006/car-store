@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Admin Dashboard</title>
+    <link rel="stylesheet" href="./css/style.css">
+</head>
+<body>
+    <nav class="navbar dark">
+        <div class="brand">CarManager <span class="badge danger">Admin</span></div>
+        <div class="nav-right">
+            <button onclick="window.print()" class="btn btn-sm btn-secondary">Export Report</button>
+            <button id="logout-btn" class="btn btn-sm btn-danger" onclick="logout()">Logout</button>
+        </div>
+    </nav>
+
+    <div class="layout">
+        <aside class="sidebar">
+            <button class="tab-link active" data-tab="stats">Overview</button>
+            <button class="tab-link" data-tab="users">Users</button>
+            <button class="tab-link" data-tab="all-cars">Cars</button>
+            <button class="tab-link" data-tab="all-rentals">Rentals</button>
+            <button class="tab-link" data-tab="all-sales">Sales</button>
+            <button class="tab-link" data-tab="all-payments">Payments</button>
+        </aside>
+
+        <main class="content">
+            <section id="stats" class="tab-content active">
+                <h2>System Overview</h2>
+                <div class="stats-grid" id="stats-container"></div>
+                <div class="chart-container">
+                    <h3>Revenue & Activity</h3>
+                    <canvas id="adminChart" width="600" height="300"></canvas>
+                </div>
+            </section>
+
+            <section id="users" class="tab-content hidden">
+                <h2>All Users</h2>
+                <table class="data-table" id="users-table">
+                    <thead><tr><th>ID</th><th>Name</th><th>Email</th><th>Role</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </section>
+
+            <section id="all-cars" class="tab-content hidden">
+                <h2>All Cars</h2>
+                <table class="data-table" id="cars-table">
+                    <thead><tr><th>ID</th><th>Owner</th><th>Brand</th><th>Model</th><th>Price</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </section>
+
+            <section id="all-rentals" class="tab-content hidden">
+                <h2>All Rentals</h2>
+                <table class="data-table" id="rentals-table">
+                    <thead><tr><th>ID</th><th>Car</th><th>Renter</th><th>Dates</th><th>Price</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </section>
+
+            <section id="all-sales" class="tab-content hidden">
+                <h2>All Sales</h2>
+                <table class="data-table" id="sales-table">
+                    <thead><tr><th>ID</th><th>Car</th><th>Seller</th><th>Buyer</th><th>Price</th><th>Date</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </section>
+
+             <section id="all-payments" class="tab-content hidden">
+                <h2>All Payments</h2>
+                <table class="data-table" id="payments-table">
+                    <thead><tr><th>ID</th><th>User</th><th>Amount</th><th>Type</th><th>Date</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </section>
+        </main>
+    </div>
+
+    <script src="./js/api.js"></script>
+    <script src="./js/admin.js"></script>
+</body>
+</html>

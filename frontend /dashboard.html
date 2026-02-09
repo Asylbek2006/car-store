@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CarManager Dashboard</title>
+    <link rel="stylesheet" href="./css/style.css">
+    <style>
+        /* Essential Internal Styles for layout */
+        .hidden { display: none !important; }
+        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 1000; }
+        .modal-content { background: white; padding: 20px; border-radius: 8px; width: 400px; max-width: 90%; }
+        .active { font-weight: bold; background-color: #ddd; }
+        .tab-content { padding: 20px; }
+        .sidebar button { display: block; width: 100%; padding: 10px; text-align: left; border: none; background: none; cursor: pointer; }
+        .sidebar button:hover { background: #eee; }
+        .sidebar button.active { background: #007bff; color: white; }
+        .grid-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 15px; margin-top: 15px; }
+        .card { border: 1px solid #ccc; padding: 15px; border-radius: 5px; background: white; }
+        .btn-sm { padding: 5px 10px; border: none; cursor: pointer; border-radius: 3px; margin-right: 5px; }
+    </style>
+</head>
+<body>
+    <nav class="navbar" style="padding: 10px; background: #333; color: white; display: flex; justify-content: space-between; align-items: center;">
+        <div class="brand" style="font-size: 1.2em; font-weight: bold;">CarManager <span class="badge" style="background:orange; color:black; padding:2px 5px; border-radius:3px; font-size: 0.7em;">User</span></div>
+        <div class="nav-right">
+            <span style="margin-right: 15px; font-weight: bold; color: #4caf50;">$ <span id="nav-balance">...</span></span>
+            <span id="user-display" style="margin-right: 15px;">User</span>
+            <button id="logout-btn" style="background: red; color: white; border: none; padding: 5px 10px; cursor: pointer;">Logout</button>
+        </div>
+    </nav>
+
+    <div class="layout" style="display: flex; height: 100vh;">
+        <aside class="sidebar" style="width: 200px; background: #f4f4f4; border-right: 1px solid #ddd;">
+            <button class="tab-link active" data-tab="marketplace">Marketplace</button>
+            <button class="tab-link" data-tab="cars">My Garage</button>
+            <button class="tab-link" data-tab="recommendations">AI Car Finder</button>
+            <button class="tab-link" data-tab="create-car">List a Car</button>
+            <button class="tab-link" data-tab="rentals">My Rentals</button>
+            <button class="tab-link" data-tab="payments">Payments / Wallet</button>
+        </aside>
+
+        <main class="content" style="flex: 1; overflow-y: auto; padding: 20px;">
+            
+            <div id="alert-box" class="hidden" style="padding: 10px; background: #d4edda; color: #155724; border: 1px solid #c3e6cb; margin-bottom: 15px; border-radius: 4px;"></div>
+
+            <section id="marketplace" class="tab-content">
+                <div class="header-row" style="display: flex; justify-content: space-between;">
+                    <h2>Marketplace</h2>
+                    <button onclick="loadMarketplace()">Refresh</button>
+                </div>
+                <div id="market-grid" class="grid-container"></div>
+            </section>
+
+            <section id="recommendations" class="tab-content hidden">
+                <h2>AI Car Finder</h2>
+                <div class="card" style="max-width: 600px;">
+                    <p>Answer these questions to get a recommendation:</p>
+                    <div id="questions-container"></div>
+                    <button class="btn-primary mt-2" onclick="getRecommendations()" style="margin-top: 10px; padding: 8px; background: #007bff; color: white; border: none;">Get Results</button>
+                </div>
+                <div id="recommendation-results" class="grid-container mt-2"></div>
+            </section>
+
+            <section id="cars" class="tab-content hidden">
+                <div class="header-row" style="display: flex; justify-content: space-between;">
+                    <h2>My Garage</h2>
+                    <button onclick="loadUserCars()">Refresh</button>
+                </div>
+                <p>Click "Manage Assets" to add Maintenance records, Fuel logs, or Expenses.</p>
+                <div id="cars-grid" class="grid-container"></div>
+            </section>
+
+            <section id="create-car" class="tab-content hidden">
+                <h2>List a New Car</h2>
+                <div class="card" style="max-width: 500px;">
+                    <form id="create-car-form">
+                        <div style="margin-bottom: 10px;"><label>Brand</label><br><input type="text" name="brand" required style="width: 100%;"></div>
+                        <div style="margin-bottom: 10px;"><label>Model</label><br><input type="text" name="model" required style="width: 100%;"></div>
+                        <div style="margin-bottom: 10px;"><label>Year</label><br><input type="number" name="year" required style="width: 100%;"></div>
+                        <div style="margin-bottom: 10px;"><label>Price ($)</label><br><input type="number" step="0.01" name="price" required style="width: 100%;"></div>
+                        <div style="margin-bottom: 10px;">
+                            <label>Status</label><br>
+                            <select name="status" style="width: 100%;">
+                                <option value="for_sale">For Sale</option>
+                                <option value="for_rent">For Rent</option>
+                            </select>
+                        </div>
+                        <button type="submit" style="background: green; color: white; padding: 10px; border: none; width: 100%; cursor: pointer;">Save Car</button>
+                    </form>
+                </div>
+            </section>
+
+            <section id="rentals" class="tab-content hidden">
+                <h2>My Rentals</h2>
+                <table border="1" style="width: 100%; border-collapse: collapse;">
+                    <thead><tr style="background: #eee;"><th>ID</th><th>Car ID</th><th>Start</th><th>End</th><th>Total</th></tr></thead>
+                    <tbody id="rentals-table-body"></tbody>
+                </table>
+            </section>
+
+            <section id="payments" class="tab-content hidden">
+                <h2>My Wallet & Payments</h2>
+                
+                <div style="background: #e3f2fd; padding: 15px; border-radius: 5px; margin-bottom: 20px; border: 1px solid #90caf9;">
+                    <h3>Current Balance: <span id="wallet-balance-display">$ Loading...</span></h3>
+                </div>
+
+                <button style="background: green; color: white; padding: 10px 20px; border: none; cursor: pointer; font-size: 16px;" onclick="openPaymentModal()">
+                    + Make New Payment / Top Up
+                </button>
+                
+                <h3 style="margin-top: 20px;">Transaction History</h3>
+                <table border="1" style="width: 100%; border-collapse: collapse;">
+                    <thead><tr style="background: #eee;"><th>ID</th><th>Amount</th><th>Type</th><th>Date</th></tr></thead>
+                    <tbody id="payments-table-body"></tbody>
+                </table>
+            </section>
+        </main>
+    </div>
+
+    <div id="car-modal" class="modal hidden">
+        <div class="modal-content" style="width: 600px; max-height: 90vh; overflow-y: auto;">
+            <div style="display:flex; justify-content:space-between;">
+                <h2>Manage Car Assets</h2>
+                <span style="cursor:pointer; font-size: 1.5em;" onclick="closeModal('car-modal')">&times;</span>
+            </div>
+            <input type="hidden" id="modal-car-id">
+            
+            <div style="margin-bottom: 15px; border-bottom: 1px solid #ddd; padding-bottom: 10px;">
+                <button class="btn-sm" style="background:#ddd;" onclick="showMiniTab('m-maint')">Maintenance</button>
+                <button class="btn-sm" style="background:#ddd;" onclick="showMiniTab('m-fuel')">Fuel</button>
+                <button class="btn-sm" style="background:#ddd;" onclick="showMiniTab('m-exp')">Expenses</button>
+                <button class="btn-sm" style="background:#ddd;" onclick="showMiniTab('m-doc')">Docs</button>
+            </div>
+
+            <div id="m-maint" class="mini-content">
+                <form id="form-maintenance">
+                    <input type="text" name="service_type" placeholder="Service Type" required style="width: 48%;">
+                    <input type="date" name="service_date" required style="width: 48%;">
+                    <input type="number" name="cost" placeholder="Cost ($)" step="0.01" style="width: 48%; margin-top: 5px;">
+                    <button type="submit" class="btn-sm" style="width: 100%; margin-top: 10px; background: #007bff; color: white;">Add Maintenance</button>
+                </form>
+                <ul id="list-maintenance" style="margin-top: 10px; padding-left: 20px;"></ul>
+            </div>
+
+            <div id="m-fuel" class="mini-content hidden">
+                <form id="form-fuel">
+                    <input type="date" name="fill_date" required style="width: 48%;">
+                    <input type="number" name="liters" placeholder="Liters" step="0.01" required style="width: 48%;">
+                    <input type="number" name="price" placeholder="Total Price ($)" step="0.01" required style="width: 100%; margin-top: 5px;">
+                    <button type="submit" class="btn-sm" style="width: 100%; margin-top: 10px; background: #007bff; color: white;">Log Fuel</button>
+                </form>
+                <ul id="list-fuel" style="margin-top: 10px; padding-left: 20px;"></ul>
+            </div>
+            
+            <div id="m-exp" class="mini-content hidden">
+                <form id="form-expense">
+                    <input type="text" name="expense_type" placeholder="Type (e.g. Insurance)" required style="width: 100%;">
+                    <input type="number" name="amount" placeholder="Amount ($)" step="0.01" required style="width: 100%; margin-top: 5px;">
+                    <input type="date" name="expense_date" required style="width: 100%; margin-top: 5px;">
+                    <button type="submit" class="btn-sm" style="width: 100%; margin-top: 10px; background: #007bff; color: white;">Add Expense</button>
+                </form>
+                <ul id="list-expense" style="margin-top: 10px; padding-left: 20px;"></ul>
+            </div>
+
+            <div id="m-doc" class="mini-content hidden">
+                <form id="form-doc">
+                    <input type="text" name="document_type" placeholder="Doc Type" required style="width: 100%;">
+                    <input type="text" name="file_url" placeholder="File URL" required style="width: 100%; margin-top: 5px;">
+                    <label>Expiry:</label> <input type="date" name="expiry_date" required>
+                    <button type="submit" class="btn-sm" style="width: 100%; margin-top: 10px; background: #007bff; color: white;">Upload Doc Info</button>
+                </form>
+                <ul id="list-doc" style="margin-top: 10px; padding-left: 20px;"></ul>
+            </div>
+        </div>
+    </div>
+
+    <div id="rent-modal" class="modal hidden">
+        <div class="modal-content">
+            <h2>Rent Car</h2>
+            <form id="rent-form">
+                <input type="hidden" id="rent-car-id">
+                <label>Start Date</label><input type="date" name="start_date" required style="width:100%">
+                <label>End Date</label><input type="date" name="end_date" required style="width:100%">
+                <button type="submit" style="width: 100%; margin-top: 10px; background: blue; color: white; padding: 10px; border: none;">Confirm Rental</button>
+                <button type="button" onclick="closeModal('rent-modal')" style="width: 100%; margin-top: 5px; padding: 10px;">Cancel</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="payment-modal" class="modal hidden">
+        <div class="modal-content">
+            <h2>Make Payment</h2>
+            <form id="payment-form">
+                <input type="number" name="amount" placeholder="Amount ($)" step="0.01" required style="width:100%; margin-bottom: 10px;">
+                
+                <select name="payment_type" style="width:100%; margin-bottom: 10px;">
+                    <option value="service">Service</option>
+                    <option value="fine">Fine</option>
+                    <option value="tax">Tax</option>
+                    <option value="insurance">Insurance</option>
+                </select>
+                
+                <input type="number" id="payment-ref-id" placeholder="Reference ID (Optional)" style="width:100%; margin-bottom: 10px;">
+                
+                <button type="submit" style="width: 100%; background: green; color: white; padding: 10px; border: none;">Pay Now</button>
+                <button type="button" onclick="closeModal('payment-modal')" style="width: 100%; margin-top: 5px; padding: 10px;">Cancel</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="review-modal" class="modal hidden">
+        <div class="modal-content">
+            <h2>Write Review</h2>
+            <input type="hidden" id="review-car-id">
+            <textarea placeholder="Write your review here..." style="width:100%; height:80px;"></textarea>
+            <button type="button" onclick="closeModal('review-modal')" style="width: 100%; margin-top:10px; padding: 10px;">Close (Coming Soon)</button>
+        </div>
+    </div>
+
+    <script src="./js/api.js"></script>
+    <script src="./js/dashboard.js"></script>
+</body>
+</html>
