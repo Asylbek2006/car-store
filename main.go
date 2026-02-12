@@ -6,6 +6,7 @@ import (
 	"car-management-system/middleware"
 	"car-management-system/repositories"
 	"context"
+	"os" // <--- ADDED THIS IMPORT
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -15,6 +16,8 @@ import (
 
 func main() {
 	r := gin.Default()
+
+	// CORS Configuration
 	corsConfig := cors.Config{
 		AllowAllOrigins: true,
 		AllowHeaders:    []string{"*"},
@@ -22,6 +25,7 @@ func main() {
 	}
 	r.Use(cors.New(corsConfig))
 
+	// Load Config & Database
 	err := loadConfig()
 	if err != nil {
 		panic(err)
@@ -31,36 +35,48 @@ func main() {
 		panic(err)
 	}
 
-	// --- REPOSITORIES & HANDLERS ---
+	// ==========================================
+	// INIT REPOSITORIES & HANDLERS
+	// ==========================================
 	authRepository := repositories.NewAuthRepository(connection)
-	// You need to pass BOTH repos to NewPasswordResetHandler if you updated it as discussed before
-	// If your NewPasswordResetHandler only takes one, adjust this line accordingly.
-	// Based on previous context, it likely needs authRepo and passwordResetRepo.
 	passwordResetRepository := repositories.NewPasswordResetRepository(connection)
+
+	// Handlers
+	authHandler := handlers.NewAuthHandler(authRepository)
 	passwordResetHandler := handlers.NewPasswordResetHandler(authRepository, passwordResetRepository)
 
-	authHandler := handlers.NewAuthHandler(authRepository)
 	carRepository := repositories.NewCarRepository(connection)
 	carHandler := handlers.NewCarHandlers(carRepository)
+
 	saleRepository := repositories.NewSaleRepository(connection)
 	saleHandler := handlers.NewSaleHandler(carRepository, saleRepository)
+
 	rentalRepository := repositories.NewRentalRepository(connection)
 	rentalHandler := handlers.NewRentalHandler(carRepository, rentalRepository)
+
 	paymentRepository := repositories.NewPaymentRepository(connection)
 	paymentHandler := handlers.NewPaymentHandler(paymentRepository)
+
 	maintenanceRepository := repositories.NewMaintenanceRepository(connection)
 	maintenanceHandler := handlers.NewMaintenanceHandler(carRepository, maintenanceRepository)
+
 	fuelRepository := repositories.NewFuelRepository(connection)
 	fuelHandler := handlers.NewFuelHandler(carRepository, fuelRepository)
+
 	expenseRepository := repositories.NewExpenseRepository(connection)
 	expenseHandler := handlers.NewExpenseHandler(carRepository, expenseRepository)
+
 	documentRepository := repositories.NewDocumentRepository(connection)
 	documentHandler := handlers.NewDocumentHandler(carRepository, documentRepository)
+
 	reviewRepository := repositories.NewReviewRepository(connection)
 	reviewHandler := handlers.NewReviewHandler(carRepository, reviewRepository)
-	recommendationHandler := handlers.NewRecommendationHandler(carRepository)
+
 	adminRepository := repositories.NewAdminRepository(connection)
 	adminHandler := handlers.NewAdminHandler(adminRepository)
+
+	// AI Recommendation Handler
+	recommendationHandler := handlers.NewRecommendationHandler(carRepository)
 
 	// Serve static files
 	r.Static("/static", "./frontend")
@@ -73,10 +89,12 @@ func main() {
 	r.POST("/api/user/signIn", authHandler.SignIn)
 	r.POST("/api/user/signOut", authHandler.SignOut)
 
-	// *** MOVED HERE (Fix) ***
-	// Password reset must be public because the user is logged out!
 	r.POST("/api/user/forgot-password", passwordResetHandler.ForgotPassword)
 	r.POST("/api/user/reset-password", passwordResetHandler.ResetPassword)
+
+	// AI Recommendation Routes (Public)
+	r.GET("/recommendation/questions", recommendationHandler.GetQuestions)
+	r.POST("/recommendation/result", recommendationHandler.GetRecommendation)
 
 	// ==========================================
 	// 2. AUTHORIZED ROUTES (Token Required)
@@ -136,9 +154,6 @@ func main() {
 
 		authorized.POST("/api/cars/:id/reviews", reviewHandler.CreateReview)
 		authorized.GET("/api/cars/:id/reviews", reviewHandler.GetByCar)
-
-		authorized.GET("/api/recommendation/questions", recommendationHandler.GetQuestions)
-		authorized.POST("/api/recommendation/result", recommendationHandler.GetRecommendation)
 	}
 
 	r.Run(config.Config.AppHost)
@@ -159,6 +174,8 @@ func connectToDb() (*pgxpool.Pool, error) {
 func loadConfig() error {
 	viper.AutomaticEnv()
 	viper.SetConfigFile(".env")
+
+	// Set Defaults
 	if err := viper.BindEnv("APP_HOST"); err != nil {
 		viper.SetDefault("APP_HOST", ":8000")
 	}
@@ -171,10 +188,21 @@ func loadConfig() error {
 	if err := viper.BindEnv("JWT_EXPIRES_IN"); err != nil {
 		viper.SetDefault("JWT_EXPIRES_IN", "24h")
 	}
+
+	// Read the .env file
 	err := viper.ReadInConfig()
 	if err != nil {
+		// It is okay if .env doesn't exist (e.g. production), but we return error if format is bad
+		// If you want to allow missing .env, verify err type. For now, we return err.
 		return err
 	}
+
+	// ⬇️ CRITICAL UPDATE: Bridge Viper config to OS Environment for the AI Handler
+	// Viper reads the file, but the Google SDK looks for 'os.Getenv'
+	if apiKey := viper.GetString("GEMINI_API_KEY"); apiKey != "" {
+		os.Setenv("GEMINI_API_KEY", apiKey)
+	}
+
 	var mapConfig config.MapConfig
 	err = viper.Unmarshal(&mapConfig)
 	if err != nil {

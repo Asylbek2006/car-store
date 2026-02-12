@@ -6,20 +6,13 @@
     RENTALS: '/api/user/rentals', 
     PAYMENTS: '/api/payments',
     SALES: '/api/sales', 
-    BUY_CAR: '/api/car/buy', // Correct endpoint for buying
-    RECOMMEND: '/api/recommendation' 
+    BUY_CAR: '/api/car/buy', 
+    RECOMMEND: '/recommendation' 
 };
 
 let currentRentPrice = 0; 
 let recQuestions = [];
 let userAnswers = {};
-
-const GENERIC_SUGGESTIONS = {
-    "SUV": { desc: "Great for families/off-road.", examples: "Toyota RAV4, Honda CR-V" },
-    "Sedan": { desc: "Efficient city driving.", examples: "Toyota Camry, Honda Accord" },
-    "Hatchback": { desc: "Compact and versatile.", examples: "Volkswagen Golf, Ford Focus" },
-    "Electric": { desc: "Eco-friendly tech.", examples: "Tesla Model 3, Nissan Leaf" }
-};
 
 /* =========================================
    INITIALIZATION
@@ -48,7 +41,7 @@ document.addEventListener('DOMContentLoaded', () => {
     loadPayments();
     loadRecommendationQuestions(); 
     
-    // 5. ATTACH LISTENERS (Using helper to prevent duplicates)
+    // 5. ATTACH LISTENERS
     attachFormListener('create-car-form', handleListCar);
     attachFormListener('rent-form', handleRentSubmit);
     attachFormListener('payment-form', handlePaymentSubmit);
@@ -67,7 +60,6 @@ function attachFormListener(id, handler) {
         const newForm = form.cloneNode(true);
         form.parentNode.replaceChild(newForm, form);
         newForm.addEventListener('submit', handler);
-        console.log(`Listener attached to #${id}`);
     }
 }
 
@@ -107,7 +99,6 @@ async function handleListCar(e) {
         await api.post(API.CARS, payload);
         alert('Car listed successfully!');
         e.target.reset(); 
-        // Switch to Garage tab
         document.querySelector('[data-tab="cars"]').click(); 
         setTimeout(loadUserCars, 300);
     } catch (err) {
@@ -146,7 +137,6 @@ function renderCarCard(car, type) {
     let btns = '';
     if (type === 'market') {
         if (car.status === 'for_rent') btns = `<button class="btn-sm" style="background:blue; color:white;" onclick="openRentModal(${car.car_id}, ${car.price})">Rent</button>`;
-        // UPDATED: Calls buyCar correctly
         if (car.status === 'for_sale') btns = `<button class="btn-sm" style="background:green; color:white;" onclick="buyCar(${car.car_id}, ${car.price})">Buy</button>`;
     } else {
         btns = `<button class="btn-sm" style="background:#444; color:white;" onclick="openAssetModal(${car.car_id})">Manage Assets</button>`;
@@ -161,17 +151,14 @@ function renderCarCard(car, type) {
     </div>`;
 }
 
-// *** CRITICAL FIX: BUY CAR LOGIC ***
 window.buyCar = async (carId, price) => {
     if(!confirm(`Buy for $${price}?`)) return;
     try {
-        // Send JSON { "car_id": 123 } to /api/car/buy
         await api.post(API.BUY_CAR, { car_id: parseInt(carId) });
-        
         alert('Purchase Successful!'); 
         loadMarketplace(); 
         loadUserCars();
-        loadPayments(); // Refresh balance
+        loadPayments();
     } catch (err) { 
         console.error("Buy failed", err);
         alert('Transaction Failed: ' + (err.message || "Unknown error")); 
@@ -188,7 +175,7 @@ const setupAssetForm = (id, type) => {
         const formData = new FormData(e.target);
         const data = Object.fromEntries(formData.entries());
         
-        ['cost', 'amount', 'price', 'liters', 'mileage'].forEach(k => { if(data[k]) data[k] = parseFloat(data[k]); });
+        ['cost', 'amount', 'price', 'liters'].forEach(k => { if(data[k]) data[k] = parseFloat(data[k]); });
         if (type === 'maintenance' && data.service_date && !data.service_date.includes('T')) data.service_date += 'T00:00:00Z';
 
         try {
@@ -224,7 +211,6 @@ async function loadAssetHistory(carId, type, listId) {
 /* =========================================
    FEATURE: PAYMENTS & RENTALS
    ========================================= */
-// *** FIX: Open Payment Modal ***
 window.openPaymentModal = () => {
     document.getElementById('payment-modal').classList.remove('hidden');
 };
@@ -249,15 +235,11 @@ async function loadPayments() {
         const payments = await api.get(API.PAYMENTS);
         const tbody = document.getElementById('payments-table-body');
         if(tbody) tbody.innerHTML = payments.map(p => `<tr><td>${p.payment_id}</td><td>$${p.amount}</td><td>${p.payment_type}</td><td>${new Date(p.created_at).toLocaleDateString()}</td></tr>`).join('');
-        
-        // Mock Balance Update (Since we assume user starts with 1M)
-        // If your backend API returns user balance in a dedicated endpoint, use that here.
         document.getElementById('nav-balance').innerText = "1,000,000 (DB)"; 
         document.getElementById('wallet-balance-display').innerText = "$ Check DB";
     } catch (e) {}
 }
 
-// Rental Logic
 window.openRentModal = (id, price) => { 
     document.getElementById('rent-car-id').value = id; 
     currentRentPrice = parseFloat(price); 
@@ -309,18 +291,68 @@ function setupTabs() {
     });
 }
 
-// Recommendations
+/* =========================================
+   AI RECOMMENDATION SYSTEM (FIXED)
+   ========================================= */
 async function loadRecommendationQuestions() {
     try {
+        // This calls http://localhost:8000/recommendation/questions
         recQuestions = await api.get(`${API.RECOMMEND}/questions`);
         const container = document.getElementById('questions-container');
-        if (container) container.innerHTML = recQuestions.map(q => `<div><label>${q.question}</label><select onchange="saveAnswer('${q.id}', this.value)"><option value="">Select...</option>${q.options.map(o => `<option value="${o}">${o}</option>`).join('')}</select></div>`).join('');
-    } catch (e) {}
+        
+        if (container && recQuestions.length > 0) {
+            // ✅ FIX: Capital letters (q.Question, q.Options, q.ID) match Go Backend
+            container.innerHTML = recQuestions.map(q => `
+                <div style="margin-bottom:15px; border-bottom:1px solid #eee; padding-bottom:10px;">
+                    <label style="font-weight:bold; display:block; margin-bottom:5px;">
+                        ${q.ID}. ${q.Question}
+                    </label>
+                    <select onchange="saveAnswer('${q.ID}', this.value)" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:4px;">
+                        <option value="">Select an option...</option>
+                        ${q.Options.map(o => `<option value="${o}">${o}</option>`).join('')}
+                    </select>
+                </div>
+            `).join('');
+        } else {
+            if(container) container.innerHTML = "<p>No questions loaded.</p>";
+        }
+    } catch (e) {
+        console.error("Failed to load questions", e);
+        const container = document.getElementById('questions-container');
+        if(container) container.innerHTML = `<p style="color:red">Error loading questions. Is the Go server running?</p>`;
+    }
 }
-window.saveAnswer = (qId, val) => { userAnswers[qId] = val; };
+
+window.saveAnswer = (qId, val) => { 
+    userAnswers[qId] = val; 
+};
+
 window.getRecommendations = async () => {
+    const btn = document.querySelector('button[onclick="getRecommendations()"]');
+    const oldText = btn.innerText;
+    btn.innerText = "Thinking...";
+    btn.disabled = true;
+
     try {
+        // This calls http://localhost:8000/recommendation/result
         const res = await api.post(`${API.RECOMMEND}/result`, { answers: userAnswers });
-        document.getElementById('recommendation-results').innerHTML = `<p>AI Suggests: ${res.recommended_type}</p>` + (res.cars || []).map(c => `<div>${c.brand} ${c.model}</div>`).join('');
-    } catch (e) { alert(e.message); }
+        
+        // Show text result + Image link
+        const searchUrl = `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(res.car_name)}`;
+        
+        document.getElementById('recommendation-results').innerHTML = `
+            <div class="card" style="background:#e8f5e9; border:1px solid #c8e6c9;">
+                <h3 style="color:#2e7d32;">${res.car_name}</h3>
+                <p style="font-style:italic;">"${res.reasoning}"</p>
+                <a href="${searchUrl}" target="_blank" style="display:inline-block; margin-top:10px; padding:8px 15px; background:#007bff; color:white; text-decoration:none; border-radius:4px;">
+                    View Photos
+                </a>
+            </div>
+        `;
+    } catch (e) { 
+        alert("AI Error: " + e.message); 
+    } finally {
+        btn.innerText = oldText;
+        btn.disabled = false;
+    }
 };
