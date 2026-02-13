@@ -29,7 +29,7 @@ func NewRecommendationHandler(carRepo *repositories.CarRepository) *Recommendati
 	}
 
 	// ✅ FIX: Use 'gemini-1.5-flash'. It works perfectly with library v0.19.0
-	model := client.GenerativeModel("gemini-1.5-flash")
+	model := client.GenerativeModel("gemini-2.5-flash")
 	model.ResponseMIMEType = "application/json"
 
 	return &RecommendationHandler{

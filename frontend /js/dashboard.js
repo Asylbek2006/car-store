@@ -294,22 +294,21 @@ function setupTabs() {
 /* =========================================
    AI RECOMMENDATION SYSTEM (FIXED)
    ========================================= */
-async function loadRecommendationQuestions() {
+   async function loadRecommendationQuestions() {
     try {
-        // This calls http://localhost:8000/recommendation/questions
         recQuestions = await api.get(`${API.RECOMMEND}/questions`);
         const container = document.getElementById('questions-container');
         
         if (container && recQuestions.length > 0) {
-            // ✅ FIX: Capital letters (q.Question, q.Options, q.ID) match Go Backend
+            // ✅ FIX: Use lowercase (id, question, options) to match standard JSON output
             container.innerHTML = recQuestions.map(q => `
                 <div style="margin-bottom:15px; border-bottom:1px solid #eee; padding-bottom:10px;">
                     <label style="font-weight:bold; display:block; margin-bottom:5px;">
-                        ${q.ID}. ${q.Question}
+                        ${q.id || q.ID}. ${q.question || q.Question}
                     </label>
-                    <select onchange="saveAnswer('${q.ID}', this.value)" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:4px;">
+                    <select onchange="saveAnswer('${q.id || q.ID}', this.value)" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:4px;">
                         <option value="">Select an option...</option>
-                        ${q.Options.map(o => `<option value="${o}">${o}</option>`).join('')}
+                        ${(q.options || q.Options || []).map(o => `<option value="${o}">${o}</option>`).join('')}
                     </select>
                 </div>
             `).join('');
